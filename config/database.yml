@@ -32,7 +32,7 @@ development:
 production:
   adapter: postgresql
   encoding: utf8
-  database: apprenticer
+  database: <%=ENV['DB_NAME']%>
   port: 5432
   username: <%=ENV['DB_USER_NAME']%>
   password: <%=ENV['DB_PASS']%>
