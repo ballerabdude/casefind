@@ -10,5 +10,5 @@ Rails.application.routes.draw do
   end
 
   root 'devices#index'
-  resources :devices
+  resources :devices, only: {:index, :show}
 end
