@@ -10,5 +10,15 @@
   <%= @device.longitude %>
 </p>
 
+<p>
+  <strong>Status:</strong>
+  <%= @device.status %>
+</p>
+
+<p>
+  <strong>Serial:</strong>
+  <%= @device.serial %>
+</p>
+
 <%= link_to 'Edit', edit_device_path(@device) %> |
 <%= link_to 'Back', devices_path %>

@@ -4,11 +4,15 @@ Rails.application.routes.draw do
 
 
   namespace :api, defaults: {format: 'json'} do
+
     scope module: :v1, constraints: ApiConstraints.new(version: 1, default: :true) do
       resources :devices
+      get "/status/:serial" => "devices#get_status"
+
     end
   end
 
   root 'devices#index'
   resources :devices, only: [:index, :show]
+
 end

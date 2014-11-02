@@ -51,10 +51,6 @@ void ringInterrupt () {
 
 
 void setup () {
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(500);
-  digitalWrite(BUZZER_PIN, LOW);
 
   Serial.begin(115200);
   Serial.println(F("GPS Tracker."));
@@ -98,7 +94,7 @@ void setup () {
   Serial.println(F(" done."));
 
   // Attach the RI interrupt
-  attachInterrupt(0, ringInterrupt, FALLING);
+  //attachInterrupt(0, ringInterrupt, FALLING);
 
 
   // We need to start the GPS second... By default, the last intialized port is listening.
@@ -139,6 +135,31 @@ void loop () {
 
   //if (ringing && digitalRead(FONA_PS) == HIGH) handleRing();
   //getNewData();
+  int status;
+  getStatus(&status);
+
+  switch (status) {
+
+    case 0: { //The device is not lost
+
+    }
+
+    case 1: {//The device is in lost mode
+      findLocation();
+    }
+
+    case 2: {//
+
+    }
+  }
+
+
+  // if millis() wraps around, reset the timer
+  if (timer > millis()) timer = millis();
+}
+
+void findLocation() {
+  gpsSerial.listen();
   if (gps.newNMEAreceived() && gps.parse(gps.lastNMEA())) {
     boolean isValidFix = gps.fix && gps.HDOP < 5 && gps.HDOP != 0;  // HDOP == 0 is an error case that comes up on occasion.
 
@@ -166,18 +187,14 @@ void loop () {
         }
       } else {
         Serial.println(F("No valid fix."));
+        findLocation();
       }
       Serial.println();
 
       timer = millis(); // reset the timer
     }
   }
-
-  // if millis() wraps around, reset the timer
-  if (timer > millis()) timer = millis();
 }
-
-
 
 void sendLocation () {
   char *url;
