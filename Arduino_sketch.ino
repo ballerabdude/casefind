@@ -49,6 +49,7 @@ void ringInterrupt () {
   ringing = true;
 }
 
+char device_serial;
 
 void setup () {
 
@@ -79,6 +80,8 @@ void setup () {
   }
   Serial.println(F(" done."));
 
+
+
   // wait for a valid network, nothing works w/o that
   Serial.print(F("Waiting for GSM network..."));
   while (1) {
@@ -87,6 +90,12 @@ void setup () {
     delay(250);
   }
 
+  while(1){
+    boolean receivedSerial = getDeviceSerial(&device_serial);
+
+    if (receivedSerial) break;
+    
+  }
 
 
   // Sometimes the FONA can't recieve SMSs until it sends one first.
@@ -136,7 +145,7 @@ void loop () {
   //if (ringing && digitalRead(FONA_PS) == HIGH) handleRing();
   //getNewData();
   int status;
-  getStatus(&status);
+  //getStatus(&status);
 
   switch (status) {
 
@@ -279,139 +288,77 @@ void sendLocation () {
   gpsSerial.listen();
 }
 
-void getNewData(){
-  // read website URL
-      uint16_t statuscode;
-      int16_t length;
-      char url[80];
-      fonaSerial.listen();
-      while(!fona.enableGPRS(true)){
-        fona.enableGPRS(false);
+boolean getDeviceSerial(char *serial) {
+  char *url;
+  uint16_t statuscode;
+  int16_t length;
+  char *response;
+
+  // Gets SIM card IMEI number.
+  char imei[15] = {0}; // MUST use a 16 character buffer for IMEI!
+  uint8_t imeiLen = fona.getIMEI(imei);
+  if (imeiLen > 0) {
+
+    sprintf (url, "http://frozen-ocean-8287.herokuapp.com/api/getserial/%s", imei);
+
+    uint8_t rssi = fona.getRSSI();
+
+    if (rssi > 5) {
+      // Make an attempt to turn GPRS mode on.  Sometimes the FONA gets freaked out and GPRS doesn't turn off.
+      // When this happens you can't turn it on aagin, but you don't need to because it's on.  So don't sweat
+      // the error case here -- GPRS could already be on -- just keep on keeping on and let HTTP_GET_start()
+      // error if there's a problem with GPRS.
+      if (!fona.enableGPRS(true)) {
+        Serial.println(F("Failed to turn GPRS on!"));
       }
 
-      sprintf(url, "https://data.sparkfun.com/streams/v0Vy2zZ84MUEx9VKMJv3");
-      Serial.println(url);
+      if (fona.HTTP_GET_start(url, &statuscode, (uint16_t *)&length)) {
+        char responseJson[125];
+        int index = 0;
+        while (length > 0) {
+          while (fona.available()) { //While device is available it will itirate the json responce into a char
 
-       Serial.println(F("****"));
-       if (!fona.HTTP_GET_start(url, &statuscode, (uint16_t *)&length)) {
-         Serial.println("Failed!");
-       }
-       while (length > 0) {
-         while (fona.available()) {
-           char c = fona.read();
+            responseJson[index] = fona.read();
+            length--;
+            index++;
+            if (! length) break;
+          }
+        }
+        fona.HTTP_GET_end();
+        Serial.println(F("response from web"));
 
-           // Serial.write is too slow, we'll write directly to Serial register!
-           loop_until_bit_is_set(UCSR0A, UDRE0); /* Wait until data register empty. */
-           UDR0 = c;
+        response = responseJson;
 
-           length--;
-           if (! length) break;
-         }
-       }
-       Serial.println(F("\n****"));
-       fona.HTTP_GET_end();
-//    // check for GSMLOC (requires GPRS)
-//       uint16_t returncode;
-//
-//       if (!fona.getGSMLoc(&returncode, replybuffer, 250))
-//         Serial.println(F("Failed!"));
-//       if (returncode == 0) {
-//         Serial.println(replybuffer);
-//       } else {
-//         Serial.print(F("Fail code #")); Serial.println(returncode);
-//       }
+        Serial.println(response);
+        JsonParser<16> parser;
 
-}
+        JsonObject root = parser.parse(response);
 
-void handleRing () {
-  //Serial.println(F("Ring ring, Neo."));
-
-  fonaSerial.listen();
-  int8_t sms_num = fona.getNumSMS();
-
-  if (sms_num > -1) {
-    Serial.print(sms_num); Serial.println(" messages waiting.");
-
-    char sms_buffer[9];
-    uint16_t smslen;
-
-    // Read any SMS message we may have...
-    for (int8_t sms_index = 1; sms_index <= sms_num; sms_index++) {
-      Serial.print(F("  SMS #")); Serial.print(sms_index); Serial.print(F(": "));
-
-      if (fona.readSMS(sms_index, sms_buffer, 8, &smslen)) {
-        // if the length is zero, its a special case where the index number is higher
-        // so increase the max we'll look at!
-        if (smslen == 0) {
-          Serial.println(F("[empty slot]"));
-          sms_num++;
-          continue;
+        if (!root.success())
+        {
+            Serial.println("JsonParser.parse() failed");
         }
 
-        Serial.println(sms_buffer);
+        serial  = root["serial"];
 
-        // If it matches our pre-defined command string...
-        if (strcmp(sms_buffer, "Location") == 0) {
-          Serial.print(F("  Responding with location..."));
+        return true;
 
-          if (fonaSendLocationSMS(MY_PHONE_NUMBER)) {
-            Serial.println(F(" sent."));
-          } else {
-            Serial.println(F(" failed!"));
-          }
-
-          // delete this SMS
-          fona.deleteSMS(sms_index);
-        } else if (strcmp(sms_buffer, "Status") == 0) {
-          Serial.print(F("  Responding with status..."));
-
-          if (fonaSendStatusSMS(MY_PHONE_NUMBER)) {
-            Serial.println(F(" sent."));
-          } else {
-            Serial.println(F(" failed!"));
-          }
-
-          // delete this SMS
-          fona.deleteSMS(sms_index);
-        }
-      } else {
-        Serial.println(F("Failed to read SMS messages!"));
-      }
+    } else {
+      Serial.println(F("Failed to send GPRS data!"));
+      return false;
     }
 
-    gpsSerial.listen();
-    ringing = false;
-
-  }
-  gpsSerial.listen();
-    ringing = false;
-}
+    if (!fona.enableGPRS(false)) {
+      Serial.println(F("Failed to turn GPRS off!"));
+    }
 
 
-boolean fonaSendLocationSMS (char *recipient) {
-  char sms_response[52];
-
-  if (current_location.isValid) {
-    sprintf (sms_response, "https://maps.google.com?q=%s,%s", current_location.latitude_c, current_location.longitude_c);
   } else {
-    sprintf (sms_response, "I'm lost!");
+    Serial.println(F("Can't transmit, network signal strength is crap!"));
+    return false;
   }
-
-  return fona.sendSMS(recipient, sms_response);
+ }
 }
-
-
-boolean fonaSendStatusSMS (char *recipient) {
-  uint8_t rssi = fona.getRSSI();
-  uint16_t vbat;
-  fona.getBattVoltage(&vbat);
-
-  char sms_response[16];
-  sprintf (sms_response, "%d bars, %d mV", barsFromRSSI(rssi), vbat);
-
-  return fona.sendSMS(recipient, sms_response);
-}
-
 
 uint8_t barsFromRSSI (uint8_t rssi) {
   // https://en.wikipedia.org/wiki/Mobile_phone_signal#ASU

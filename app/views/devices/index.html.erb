@@ -7,6 +7,7 @@
       <th>Longitude</th>
       <th>Status</th>
       <th>Serial</th>
+      <th>Imei</th>
       <th colspan="3"></th>
     </tr>
   </thead>
@@ -18,6 +19,7 @@
         <td><%= device.longitude %></td>
         <td><%= device.status %></td>
         <td><%= device.serial %></td>
+        <td><%= device.imei %></td>
         <td><%= link_to 'Show', device %></td>
         <td><%= link_to 'Edit', edit_device_path(device) %></td>
         <td><%= link_to 'Destroy', device, method: :delete, data: { confirm: 'Are you sure?' } %></td>

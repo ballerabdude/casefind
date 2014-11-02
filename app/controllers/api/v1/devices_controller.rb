@@ -26,15 +26,19 @@ module Api
       end
 
       def get_status
-        puts params
         device = Device.where(serial: params[:serial]).last
         render :json => {status: device.status}
+      end
+
+      def get_serial
+        device = Device.where(imei: params[:imei]).last
+        render :json => {serial: device.serial}
       end
 
       private
         # Never trust parameters from the scary internet, only allow the white list through.
         def device_params
-          params.require(:device).permit(:latitude, :longitude, :serial, :status)
+          params.require(:device).permit(:latitude, :longitude, :serial, :status, :imei)
         end
     end
   end
