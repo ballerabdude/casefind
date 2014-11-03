@@ -1,5 +1,5 @@
 class AddImeiToDevice < ActiveRecord::Migration
   def change
-    add_column :devices, :imei, :integer
+    add_column :devices, :imei, :bigint
   end
 end

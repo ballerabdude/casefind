@@ -23,7 +23,7 @@ ActiveRecord::Schema.define(version: 20141102062308) do
     t.datetime "updated_at"
     t.string   "serial"
     t.integer  "status"
-    t.integer  "imei"
+    t.integer  "imei",       limit: 8
   end
 
 end
