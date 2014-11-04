@@ -49,10 +49,9 @@ void ringInterrupt () {
   ringing = true;
 }
 
-char device_serial;
+char *device_serial;
 
 void setup () {
-
   Serial.begin(115200);
   Serial.println(F("GPS Tracker."));
 
@@ -91,10 +90,12 @@ void setup () {
   }
 
   while(1){
-    boolean receivedSerial = getDeviceSerial(&device_serial);
-
+    Serial.println(F(" setting serial.."));
+    //char *serial = &device_serial;
+    boolean receivedSerial = getDeviceSerial();
+    Serial.println(device_serial);
     if (receivedSerial) break;
-    
+
   }
 
 
@@ -145,26 +146,30 @@ void loop () {
   //if (ringing && digitalRead(FONA_PS) == HIGH) handleRing();
   //getNewData();
   int status;
-  //getStatus(&status);
+  getStatus(&status);
 
   switch (status) {
 
     case 0: { //The device is not lost
 
+      break;
     }
 
     case 1: {//The device is in lost mode
       findLocation();
+      Serial.println(F(" sending location..."));
+      break;
     }
 
     case 2: {//
+    Serial.println(F(" case 2."));
 
     }
   }
 
 
   // if millis() wraps around, reset the timer
-  if (timer > millis()) timer = millis();
+  //if (timer > millis()) timer = millis();
 }
 
 void findLocation() {
@@ -203,6 +208,9 @@ void findLocation() {
       timer = millis(); // reset the timer
     }
   }
+
+  // if millis() wraps around, reset the timer
+  if (timer > millis()) timer = millis();
 }
 
 void sendLocation () {
@@ -288,8 +296,10 @@ void sendLocation () {
   gpsSerial.listen();
 }
 
-boolean getDeviceSerial(char *serial) {
-  char *url;
+boolean getDeviceSerial() {
+
+  char *url ;
+  char urlc[255];
   uint16_t statuscode;
   int16_t length;
   char *response;
@@ -297,10 +307,10 @@ boolean getDeviceSerial(char *serial) {
   // Gets SIM card IMEI number.
   char imei[15] = {0}; // MUST use a 16 character buffer for IMEI!
   uint8_t imeiLen = fona.getIMEI(imei);
+  Serial.print("SIM card IMEI: "); Serial.println(imei);
   if (imeiLen > 0) {
-
-    sprintf (url, "http://frozen-ocean-8287.herokuapp.com/api/getserial/%s", imei);
-
+    sprintf(urlc, "http://frozen-ocean-8287.herokuapp.com/api/getserial/%s", imei);
+    Serial.println(F("The url")); Serial.println(urlc);
     uint8_t rssi = fona.getRSSI();
 
     if (rssi > 5) {
@@ -310,15 +320,22 @@ boolean getDeviceSerial(char *serial) {
       // error if there's a problem with GPRS.
       if (!fona.enableGPRS(true)) {
         Serial.println(F("Failed to turn GPRS on!"));
+        fona.enableGPRS(false);
+        return false;
       }
 
-      if (fona.HTTP_GET_start(url, &statuscode, (uint16_t *)&length)) {
-        char responseJson[125];
+      if (fona.HTTP_GET_start(urlc, &statuscode, (uint16_t *)&length)) {
+        char responseJson[length];
         int index = 0;
         while (length > 0) {
           while (fona.available()) { //While device is available it will itirate the json responce into a char
 
-            responseJson[index] = fona.read();
+             char c = fona.read();
+
+//             // Serial.write is too slow, we'll write directly to Serial register!
+//             loop_until_bit_is_set(UCSR0A, UDRE0); /* Wait until data register empty. */
+//             UDR0 = c;
+            responseJson[index] = c;
             length--;
             index++;
             if (! length) break;
@@ -330,16 +347,24 @@ boolean getDeviceSerial(char *serial) {
         response = responseJson;
 
         Serial.println(response);
-        JsonParser<16> parser;
+        JsonParser<8> parser;
 
         JsonObject root = parser.parse(response);
 
         if (!root.success())
         {
             Serial.println("JsonParser.parse() failed");
+            return false;
         }
 
-        serial  = root["serial"];
+        char *jsonSerial  = root["serial"];
+
+        device_serial = (char *) malloc(strlen(jsonSerial) + 1); // allocate space
+        strcpy(device_serial, jsonSerial); // copy jsonSerial to device_serial
+        Serial.println(device_serial);
+        if (!fona.enableGPRS(false)) {
+          Serial.println(F("Failed to turn GPRS off!"));
+        }
 
         return true;
 
@@ -357,7 +382,12 @@ boolean getDeviceSerial(char *serial) {
     Serial.println(F("Can't transmit, network signal strength is crap!"));
     return false;
   }
+
  }
+}
+
+void getStatus(int *status){
+  *status = 1;
 }
 
 uint8_t barsFromRSSI (uint8_t rssi) {
