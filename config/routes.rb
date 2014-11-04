@@ -9,6 +9,7 @@ Rails.application.routes.draw do
       resources :devices
       get "/status/:serial" => "devices#get_status"
       get "/getserial/:imei" => "devices#get_serial"
+      post "/updatelocation/:serial" => "devices#update_location"
 
     end
   end

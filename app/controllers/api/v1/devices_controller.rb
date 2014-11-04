@@ -35,6 +35,16 @@ module Api
         render :json => {serial: device.serial}
       end
 
+      def update_location
+        device = Device.where(serial: params[:serial]).last
+        latitude = params[:latitude]
+        longitude = params[:longitude]
+        device.latitude = latitude
+        device.longitude = longitude
+        device.save
+        render nothing: true
+      end
+
       private
         # Never trust parameters from the scary internet, only allow the white list through.
         def device_params
