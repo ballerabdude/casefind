@@ -145,25 +145,32 @@ void loop () {
 
   //if (ringing && digitalRead(FONA_PS) == HIGH) handleRing();
   //getNewData();
-  int status;
-  getStatus(&status);
+  //int status;
+  int status = getStatus();
+  Serial.println(F("before switch"));
+  Serial.println(status);
 
   switch (status) {
 
     case 0: { //The device is not lost
-
+      Serial.println(F(" is zero.."));
       break;
     }
 
     case 1: {//The device is in lost mode
-      findLocation();
+      //findLocation();
       Serial.println(F(" sending location..."));
       break;
     }
 
     case 2: {//
     Serial.println(F(" case 2."));
+    break;
+    }
 
+    case 3: {//
+    Serial.println(F(" case 3."));
+    break;
     }
   }
 
@@ -386,8 +393,88 @@ boolean getDeviceSerial() {
  }
 }
 
-void getStatus(int *status){
-  *status = 1;
+int getStatus(){
+  char *url ;
+  char urlc[255];
+  uint16_t statuscode;
+  int16_t length;
+  char *response;
+    fonaSerial.listen();
+    sprintf(urlc, "http://frozen-ocean-8287.herokuapp.com/api/status/%s", device_serial);
+    Serial.println(F("The url")); Serial.println(urlc);
+    uint8_t rssi = fona.getRSSI();
+    Serial.println(rssi);
+    if (rssi > 5) {
+      // Make an attempt to turn GPRS mode on.  Sometimes the FONA gets freaked out and GPRS doesn't turn off.
+      // When this happens you can't turn it on aagin, but you don't need to because it's on.  So don't sweat
+      // the error case here -- GPRS could already be on -- just keep on keeping on and let HTTP_GET_start()
+      // error if there's a problem with GPRS.
+      if (!fona.enableGPRS(true)) {
+        Serial.println(F("Failed to turn GPRS on!"));
+        fona.enableGPRS(false);
+        return 0;
+      }
+
+      if (fona.HTTP_GET_start(urlc, &statuscode, (uint16_t *)&length)) {
+        char responseJson[length];
+        int index = 0;
+        while (length > 0) {
+          while (fona.available()) { //While device is available it will itirate the json responce into a char
+
+             char c = fona.read();
+
+//             // Serial.write is too slow, we'll write directly to Serial register!
+//             loop_until_bit_is_set(UCSR0A, UDRE0); /* Wait until data register empty. */
+//             UDR0 = c;
+            responseJson[index] = c;
+            length--;
+            index++;
+            if (! length) break;
+          }
+        }
+        fona.HTTP_GET_end();
+        Serial.println(F("response from web"));
+
+        response = responseJson;
+
+        Serial.println(response);
+        JsonParser<8> parser;
+
+        JsonObject root = parser.parse(response);
+
+        if (!root.success())
+        {
+            Serial.println("JsonParser.parse() failed");
+            return 0;
+        }
+
+        char *jsonStatus  = root["status"];
+
+        Serial.println(F("in method"));
+        Serial.println(jsonStatus);
+        if (!fona.enableGPRS(false)) {
+          Serial.println(F("Failed to turn GPRS off!"));
+        }
+
+        return (int)*jsonStatus - 48;
+
+    } else {
+      Serial.println(F("Failed to send GPRS data!"));
+      return 0;
+    }
+
+    if (!fona.enableGPRS(false)) {
+      Serial.println(F("Failed to turn GPRS off!"));
+    }
+
+
+  } else {
+    Serial.println(F("Can't transmit, network signal strength is crap!"));
+    return 0;
+  }
+
+
+
 }
 
 uint8_t barsFromRSSI (uint8_t rssi) {
